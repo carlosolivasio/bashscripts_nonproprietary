@@ -1,0 +1,63 @@
+##!/bin/bash
+## CDO -- BRAVESOFT
+export PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MYSQLDMP=/usr/local/mysql/bin/mysqldump
+MYSQL=/usr/local/mysql/bin/mysql
+STORE=30
+NOW="$(date +"%d-%m-%Y")"
+STOR_DIR="/db_backup/bkps/"
+SERVER="$(hostname)"
+EMAIL_LIST="colivas@bravesoft.com"
+service=mysqld
+BKPLOG=$STOR_DIR'CSTM_SCP1_dmp.sh.log'
+NOW2=$(date +"%r")
+DATE=$(date +%Y%m%d)
+DB=CSTM_SCP1
+CRITICAL="Please investigate $SERVER immediately"
+
+##Check to make sure mysql instance is running; exit script if not
+
+if (( $(ps -ef | grep -v grep | grep $service | wc -l) > 0 )); then
+    
+    echo "$NOW2 $service is running" >> $BKPLOG 
+
+else
+
+    echo "$NOW2 $service is down" >> $BKPLOG 
+    exit 2
+fi
+
+##Setup backup dir, exit if there's an error generating it
+mkdir -p $STOR_DIR/${DATE}_${SERVER}/
+
+if [ $? != 0 ] ; then
+    
+    echo "Problem generating the backup directory, please investigate"
+    exit 1
+    
+        else 
+    echo "$NOW2 Backup directory is already in place, no action needed." >  $BKPLOG
+fi    
+
+cd $STOR_DIR
+find /db_backup/bkps/* -type d -ctime +30 -exec rm -rf {} \;
+##find -name "$STOR_DIR" -mtime +$STORE -exec rm -rf {} \; 
+
+##
+if [ $? != 0 ] ; then
+    echo "$NOW2 Problem cleaning up old directory and dumps" >> $BKPLOG
+    echo $CRITICAL | mail -s "Investigate $SERVER for a failure in the backup script" $EMAIL_LIST
+#   mail -v -s "Investigate $SERVER for job failure" $EMAIL_LIST $CRITICAL
+    exit 2
+fi
+
+##Only dump specified database stored in DB variable ex. CSTM_SCP1
+
+ $MYSQLDMP --single-transaction --events --routines --triggers ${DB} | gzip > $STOR_DIR/${DATE}_${SERVER}/${DB}.sql.gz &
+ 
+if [ $? != 0 ] ; then
+        echo $CRITICAL | mail -s " Investigate $SERVER for a failure in the backup script" $EMAIL_LIST
+        exit 2
+fi
+
+exit 0
